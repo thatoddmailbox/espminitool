@@ -1,5 +1,5 @@
 /*
- * esp32tool
+ * espminitool
  * todo:
  *  - fix scratch buffer overflow
  *  - fix reliance on a little-endian system
@@ -23,10 +23,11 @@
 #include "protocol.h"
 
 int main(int argc, char ** argv) {
-	printf("esp32tool\n");
+	printf("espminitool\n");
 
 	if (argc < 2) {
 		printf("usage: %s <serial port>\n", argv[0]);
+		return 1;
 	}
 
 	char * port_name = argv[1];
