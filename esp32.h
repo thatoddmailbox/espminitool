@@ -6,7 +6,7 @@
 
 #define ESP32_EFUSE_REG_BASE 0x6001a000
 
-#define ESP32_STUB_ENTRY 0x40090564
+#define ESP32_STUB_ENTRY 0x4009F564
 
 typedef struct {
 	uint32_t data_start;
