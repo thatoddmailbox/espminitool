@@ -10,6 +10,9 @@ void hexdump(uint8_t * data, size_t data_len) {
 
 		if (line_i == lines - 1) {
 			bytes_on_this_line = data_len % bytes_per_line;
+			if (bytes_on_this_line == 0) {
+				bytes_on_this_line = bytes_per_line;
+			}
 		}
 
 		uint8_t spacer_bytes = (bytes_per_line - bytes_on_this_line);
