@@ -78,8 +78,8 @@ int main(int argc, char ** argv) {
 	printf("write 1\n");
 
 	// write sync packet two times to warm up autobauder
-	write(port_fd, sync_packet, sync_packet_size);
-	write(port_fd, sync_packet, sync_packet_size);
+	write_packet_data(port_fd, sync_packet, sync_packet_size);
+	write_packet_data(port_fd, sync_packet, sync_packet_size);
 
 	// read stuff
 	uint8_t sync_count = 0;
@@ -101,6 +101,8 @@ int main(int argc, char ** argv) {
 			}
 		}
 	}
+
+	download_stub(port_fd);
 
 	print_chip_info(port_fd);
 
