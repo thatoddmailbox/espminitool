@@ -16,50 +16,22 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "commands.h"
 #include "debug.h"
 #include "esp32.h"
 #include "reader.h"
 #include "protocol.h"
 
-uint32_t read_reg(int port_fd, uint32_t address) {
-	uint8_t read_reg_packet[14];
-	packet_header_t read_reg_packet_header = {
-		.direction = 0x0,
-		.command = ESP_READ_REG,
-		.data_len = 0x0,
-		.value_or_checksum = 0x0,
-	};
-	size_t read_reg_packet_size = build_packet(read_reg_packet, 14, &read_reg_packet_header, (uint8_t *) &address, 4);
-
-	printf("read pkt\n");
-	hexdump(read_reg_packet, read_reg_packet_size);
-
-	write(port_fd, read_reg_packet, read_reg_packet_size);
-
-	// read
-	while (1) {
-		uint16_t packet_size = read_packet(port_fd);
-		if (packet_size > 0) {
-			hexdump(packet_buf, packet_size);
-			if (packet_buf_header->command == ESP_READ_REG) {
-				return packet_buf_header->value_or_checksum;
-			}
-		}
-	}
-
-	return 0;
-}
-
-uint32_t read_efuse(int port_fd, uint8_t i) {
-	return read_reg(port_fd, ESP32_EFUSE_REG_BASE + (4 * i));
-}
-
 int main(int argc, char ** argv) {
 	printf("esp32tool\n");
 
-	const char * PORT_NAME = "/dev/cu.usbmodem0001";
+	if (argc < 2) {
+		printf("usage: %s <serial port>\n", argv[0]);
+	}
 
-	int port_fd = open(PORT_NAME, O_NONBLOCK | O_NOCTTY | O_RDWR);
+	char * port_name = argv[1];
+
+	int port_fd = open(port_name, O_NONBLOCK | O_NOCTTY | O_RDWR);
 
 	printf("opened\n");
 
@@ -129,57 +101,7 @@ int main(int argc, char ** argv) {
 		}
 	}
 
-	// read chip info
-	uint32_t efuse1 = read_efuse(port_fd, 1);
-	uint32_t efuse2 = read_efuse(port_fd, 2);
-	uint32_t efuse3 = read_efuse(port_fd, 3);
-	uint32_t efuse4 = read_efuse(port_fd, 4);
-	uint32_t efuse6 = read_efuse(port_fd, 6);
-
-	uint32_t chip_type = (efuse3 >> 9) & 0x7;
-	uint32_t chip_revision = (efuse3 >> 15) & 0x1;
-
-	printf("Chip type: ");
-
-	switch (chip_type) {
-		case 0:
-			printf("ESP32D0WDQ6");
-			break;
-
-		case 1:
-			printf("ESP32D0WDQ5");
-			break;
-
-		case 2:
-			printf("ESP32D2WDQ5");
-			break;
-
-		case 5:
-			printf("ESP32-PICO-D4");
-			break;
-	
-		default:
-			printf("unknown ESP32");
-			break;
-	}
-
-	printf(" - revision %d\n", chip_revision);
-
-	uint8_t mac_address[6];
-	mac_address[0] = ((uint8_t *)&efuse2)[1];
-	mac_address[1] = ((uint8_t *)&efuse2)[0];
-	mac_address[2] = ((uint8_t *)&efuse1)[3];
-	mac_address[3] = ((uint8_t *)&efuse1)[2];
-	mac_address[4] = ((uint8_t *)&efuse1)[1];
-	mac_address[5] = ((uint8_t *)&efuse1)[0];
-
-	printf("MAC address: %02x:%02x:%02x:%02x:%02x:%02x\n",
-		mac_address[0],
-		mac_address[1],
-		mac_address[2],
-		mac_address[3],
-		mac_address[4],
-		mac_address[5]);
+	print_chip_info(port_fd);
 
 	close(port_fd);
 

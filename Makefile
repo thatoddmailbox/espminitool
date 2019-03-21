@@ -1,8 +1,8 @@
 CC=gcc 
 CFLAGS=-Wall
 
-HEADERS = debug.c protocol.c reader.c main.c
-OBJECTS = debug.o protocol.o reader.o main.o
+HEADERS = commands.c debug.c protocol.c reader.c main.c
+OBJECTS = commands.o debug.o protocol.o reader.o main.o
 
 default: espminitool
 
