@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "debug.h"
 #include "esp32.h"
@@ -18,6 +19,7 @@ void ram_download_end(int port_fd, uint32_t entrypoint);
 uint32_t read_reg(int port_fd, uint32_t address);
 uint32_t read_efuse(int port_fd, uint8_t i);
 
+uint8_t sync_chip(int port_fd);
 void print_chip_info(int port_fd);
 void download_stub(int port_fd);
 

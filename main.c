@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <termios.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "commands.h"
@@ -61,48 +60,14 @@ int main(int argc, char ** argv) {
 	// actually set config
 	tcsetattr(port_fd, TCSAFLUSH, &port_config);
 
-	// create packet
-	uint8_t sync_packet[46];
-	packet_header_t sync_packet_header = {
-		.direction = 0x0,
-		.command = ESP_SYNC,
-		.data_len = 0x0,
-		.value_or_checksum = 0x0,
-	};
-	uint8_t sync_packet_data[36] = "\x07\x07\x12\x20\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55";
-	uint8_t sync_packet_data_len = 36;
-	size_t sync_packet_size = build_packet(sync_packet, 46, &sync_packet_header, sync_packet_data, sync_packet_data_len);
+	uint8_t talking_to_stub = sync_chip(port_fd);
 
-	hexdump(sync_packet, sync_packet_size);
-
-	printf("write 1\n");
-
-	// write sync packet two times to warm up autobauder
-	write_packet_data(port_fd, sync_packet, sync_packet_size);
-	write_packet_data(port_fd, sync_packet, sync_packet_size);
-
-	// read stuff
-	uint8_t sync_count = 0;
-	clock_t last_sync_packet = 0;
-	while (1) {
-		uint16_t packet_size = read_packet(port_fd);
-		if (packet_size > 0) {
-			if (packet_buf_header->command == ESP_SYNC) {
-				last_sync_packet = clock();
-				sync_count++;
-			}
-		}
-
-		if (sync_count >= 8) {
-			// we've got at least 8 sync packets
-			// maybe we're done?
-			if ((clock() - last_sync_packet) > 0.25 * CLOCKS_PER_SEC) {
-				break;
-			}
-		}
+	if (!talking_to_stub) {
+		printf("Downloading stub...\n");
+		download_stub(port_fd);
+	} else {
+		printf("Stub is running on chip, skipping download...\n");
 	}
-
-	download_stub(port_fd);
 
 	print_chip_info(port_fd);
 

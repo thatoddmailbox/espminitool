@@ -74,6 +74,54 @@ void wait_for_response(int port_fd, uint8_t command) {
 	}
 }
 
+uint8_t sync_chip(int port_fd) {
+	packet_header_t sync_packet_header = {
+		.direction = 0x0,
+		.command = ESP_SYNC,
+		.data_len = 0x0,
+		.value_or_checksum = 0x0,
+	};
+	uint8_t sync_packet_data[36] = "\x07\x07\x12\x20\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55";
+	uint8_t sync_packet_data_len = 36;
+	size_t sync_packet_size = build_packet(send_packet_buf, SEND_PACKET_BUF_SIZE, &sync_packet_header, sync_packet_data, sync_packet_data_len);
+
+	hexdump(send_packet_buf, sync_packet_size);
+
+	// write sync packet two times to warm up autobauder
+	write_packet_data(port_fd, send_packet_buf, sync_packet_size);
+	write_packet_data(port_fd, send_packet_buf, sync_packet_size);
+
+	// read stuff
+	uint8_t sync_count = 0;
+	clock_t last_sync_packet = 0;
+	uint8_t talking_to_stub = 0;
+	while (1) {
+		uint16_t packet_size = read_packet(port_fd);
+		if (packet_size > 0) {
+			if (packet_buf_header->command == ESP_SYNC) {
+				if (packet_buf_header->data_len == 2) {
+					// on the esp32, the stub sends packets with 2 data bytes, while the rom loader does 4 bytes
+					talking_to_stub = 1;
+				}
+				last_sync_packet = clock();
+				sync_count++;
+			}
+		}
+
+		uint8_t packets_per_sync = (talking_to_stub ? 1 : 4);
+
+		if (sync_count >= packets_per_sync) {
+			// we've got at least one sync's worth of packets
+			// maybe we're done?
+			if ((clock() - last_sync_packet) > 0.25 * CLOCKS_PER_SEC) {
+				break;
+			}
+		}
+	}
+
+	return talking_to_stub;
+}
+
 void ram_download_start(int port_fd, size_t data_len, size_t block_count, size_t block_size, uint32_t offset) {
 	uint8_t mem_begin_data[16];
 
@@ -166,17 +214,8 @@ uint32_t read_reg(int port_fd, uint32_t address) {
 	hexdump(send_packet_buf, read_reg_packet_size);
 
 	write_packet_data(port_fd, send_packet_buf, read_reg_packet_size);
-	write_packet_data(port_fd, send_packet_buf, read_reg_packet_size);
-	write_packet_data(port_fd, send_packet_buf, read_reg_packet_size);
-	write_packet_data(port_fd, send_packet_buf, read_reg_packet_size);
-	write_packet_data(port_fd, send_packet_buf, read_reg_packet_size);
 
 	wait_for_response(port_fd, ESP_READ_REG);
-
-	printf("superwait\n");
-	while (1) {
-		wait_for_response(port_fd, ESP_READ_REG);
-	}
 
 	return packet_buf_header->value_or_checksum;
 }
