@@ -23,4 +23,6 @@ uint8_t sync_chip(int port_fd);
 void print_chip_info(int port_fd);
 void download_stub(int port_fd);
 
+void read_flash(int port_fd, uint32_t offset, uint32_t length, uint32_t block_size, uint32_t max_blocks_in_flight, void * metadata, void (*callback)(uint8_t *, uint16_t, void *));
+
 #endif

@@ -303,3 +303,61 @@ void download_stub(int port_fd) {
 
 	printf("stub downloaded and running\n");
 }
+
+void read_flash(int port_fd, uint32_t offset, uint32_t length, uint32_t block_size, uint32_t max_blocks_in_flight, void * metadata, void (*callback)(uint8_t *, uint16_t, void *)) {
+	uint8_t read_flash_data[16];
+
+	memcpy(read_flash_data, (uint8_t *) &offset, 4);
+	memcpy(read_flash_data + 4, (uint8_t *) &length, 4);
+	memcpy(read_flash_data + 8, (uint8_t *) &block_size, 4);
+	memcpy(read_flash_data + 12, (uint8_t *) &max_blocks_in_flight, 4);
+
+	packet_header_t read_flash_packet_header = {
+		.direction = 0x0,
+		.command = ESP_READ_FLASH,
+		.data_len = 0x0,
+		.value_or_checksum = 0x0,
+	};
+	size_t read_flash_packet_size = build_packet(send_packet_buf, SEND_PACKET_BUF_SIZE, &read_flash_packet_header, read_flash_data, 16);
+
+	hexdump(send_packet_buf, read_flash_packet_size);
+
+	write_packet_data(port_fd, send_packet_buf, read_flash_packet_size);
+
+	uint8_t got_start_packet = 0;
+	uint32_t bytes_received = 0;
+
+	while (1) {
+		uint16_t packet_size = read_packet(port_fd);
+		if (packet_size > 0) {
+			if (bytes_received < length) {
+				// there's still more
+				if (!got_start_packet) {
+					got_start_packet = 1;
+					continue;
+				}
+
+				uint32_t data_size = packet_size - 2;
+
+				printf("GOT BLOCK OF SIZE %d\n", data_size);
+
+				// weird addition and subtraction are to account for the 0xC0 bytes
+				callback(packet_buf + 1, packet_size - 2, metadata);
+
+				bytes_received += data_size;
+
+				// send an acknowledgement
+				uint8_t acknowledgement[4];
+				memcpy(acknowledgement, (uint8_t *) &bytes_received, 4);
+				write_packet_data(port_fd, acknowledgement, 4);
+
+				hexdump(acknowledgement, 4);
+			} else {
+				// we're done
+				printf("got checksum?\n");
+				hexdump(packet_buf, packet_size);
+				break;
+			}
+		}
+	}
+}

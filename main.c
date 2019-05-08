@@ -21,6 +21,11 @@
 #include "reader.h"
 #include "protocol.h"
 
+void flash_callback(uint8_t * data, uint16_t size, void * metadata) {
+	FILE * fp = (FILE *) metadata;
+	fwrite(data, sizeof(uint8_t), size, fp);
+}
+
 int main(int argc, char ** argv) {
 	printf("espminitool\n");
 
@@ -70,6 +75,12 @@ int main(int argc, char ** argv) {
 	}
 
 	print_chip_info(port_fd);
+
+	FILE * data_file = fopen("data.bin", "w");
+
+	read_flash(port_fd, 0x8000, 8 * 1024, ESP_FLASH_SECTOR_SIZE, 64, (void *) data_file, flash_callback);
+
+	fclose(data_file);
 
 	close(port_fd);
 
