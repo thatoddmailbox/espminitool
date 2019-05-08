@@ -11,8 +11,8 @@
 #include "protocol.h"
 
 #define READ_BUF_SIZE 128
-#define PACKET_BUF_SIZE (512 + ESP_FLASH_SECTOR_SIZE)
-#define SCRATCH_BUF_SIZE (512 + ESP_FLASH_SECTOR_SIZE)
+#define PACKET_BUF_SIZE (512 + ESP_MAX_FLASH_BLOCK_SIZE)
+#define SCRATCH_BUF_SIZE (512 + ESP_MAX_FLASH_BLOCK_SIZE)
 
 uint8_t packet_buf[PACKET_BUF_SIZE];
 extern packet_header_t * packet_buf_header;

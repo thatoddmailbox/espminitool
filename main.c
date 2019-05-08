@@ -21,9 +21,38 @@
 #include "reader.h"
 #include "protocol.h"
 
+typedef struct {
+	char * file_name;
+	uint32_t offset;
+} file_offset_pair_t;
+
 void flash_callback(uint8_t * data, uint16_t size, void * metadata) {
 	FILE * fp = (FILE *) metadata;
 	fwrite(data, sizeof(uint8_t), size, fp);
+}
+
+uint8_t * read_file_bytes(char * name, size_t * size_out) {
+	FILE * file_pointer = fopen(name, "r");
+
+	// get file size
+	long file_size = 0;
+	fseek(file_pointer, 0, SEEK_END);
+	file_size = ftell(file_pointer);
+	rewind(file_pointer);
+
+	if (size_out) {
+		*size_out = file_size;
+	}
+
+	// create buffer
+	uint8_t * buffer = calloc(file_size, sizeof(uint8_t));
+
+	// read data
+	fread(buffer, sizeof(uint8_t), file_size, file_pointer);
+
+	fclose(file_pointer);
+
+	return buffer;
 }
 
 int main(int argc, char ** argv) {
@@ -76,11 +105,33 @@ int main(int argc, char ** argv) {
 
 	print_chip_info(port_fd);
 
-	FILE * data_file = fopen("data.bin", "w");
+	// FILE * data_file = fopen("data.bin", "w");
+	// read_flash(port_fd, 0x10000, 1 * 1024 * 1024, ESP_FLASH_SECTOR_SIZE, 64, (void *) data_file, flash_callback);
+	// fclose(data_file);
 
-	read_flash(port_fd, 0x8000, 8 * 1024, ESP_FLASH_SECTOR_SIZE, 64, (void *) data_file, flash_callback);
+	file_offset_pair_t files[] = {
+		{ .file_name = "bootloader.bin", .offset = 0x1000 },
+		{ .file_name = "hello-world.bin", .offset = 0x10000 },
+		{ .file_name = "partitions_singleapp.bin", .offset = 0x8000 }
+	};
 
-	fclose(data_file);
+	size_t file_count = sizeof(files) / sizeof(file_offset_pair_t);
+
+	for (size_t i = 0; i < file_count; i++) {
+		file_offset_pair_t file = files[i];
+		printf("%s - 0x%x\n", file.file_name, file.offset);
+
+		size_t file_size;
+		uint8_t * file_contents = read_file_bytes(file.file_name, &file_size);
+
+		write_flash(port_fd, file.offset, file_contents, file_size, ESP_MAX_FLASH_BLOCK_SIZE);
+
+		free(file_contents);
+	}
+
+	md5_flash(port_fd, 0x8000, 0xC00);
+
+	flash_download_end(port_fd, 1);
 
 	close(port_fd);
 

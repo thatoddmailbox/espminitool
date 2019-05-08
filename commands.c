@@ -1,7 +1,7 @@
 #include "commands.h"
 
-#define SEND_PACKET_BUF_SIZE 128 + ESP_MAX_RAM_BLOCK_SIZE
-#define DATA_SCRATCH_BUF_SIZE 16 + ESP_MAX_RAM_BLOCK_SIZE
+#define SEND_PACKET_BUF_SIZE 128 + ESP_MAX_FLASH_BLOCK_SIZE
+#define DATA_SCRATCH_BUF_SIZE 16 + ESP_MAX_FLASH_BLOCK_SIZE
 
 uint8_t data_scratch_buf[DATA_SCRATCH_BUF_SIZE];
 uint8_t send_packet_buf[SEND_PACKET_BUF_SIZE];
@@ -122,7 +122,7 @@ uint8_t sync_chip(int port_fd) {
 	return talking_to_stub;
 }
 
-void ram_download_start(int port_fd, size_t data_len, size_t block_count, size_t block_size, uint32_t offset) {
+void download_start(int port_fd, uint8_t command, size_t data_len, size_t block_count, size_t block_size, uint32_t offset) {
 	uint8_t mem_begin_data[16];
 
 	memcpy(mem_begin_data, (uint8_t *) &data_len, 4);
@@ -132,48 +132,52 @@ void ram_download_start(int port_fd, size_t data_len, size_t block_count, size_t
 
 	packet_header_t mem_begin_packet_header = {
 		.direction = 0x0,
-		.command = ESP_MEM_BEGIN,
+		.command = command,
 		.data_len = 0x0,
 		.value_or_checksum = 0x0,
 	};
 	size_t mem_begin_packet_size = build_packet(send_packet_buf, SEND_PACKET_BUF_SIZE, &mem_begin_packet_header, mem_begin_data, 16);
 
-	printf("ram_download_start\n");
+	printf("download_start\n");
 	hexdump(send_packet_buf, mem_begin_packet_size);
 
 	write_packet_data(port_fd, send_packet_buf, mem_begin_packet_size);
 
-	wait_for_response(port_fd, ESP_MEM_BEGIN);
+	wait_for_response(port_fd, command);
 }
 
-void ram_download_block(int port_fd, uint32_t seq, const uint8_t * data, size_t data_len) {
-	if (data_len > ESP_MAX_RAM_BLOCK_SIZE) {
-		return;
-	}
-
+void download_block(int port_fd, uint8_t command, uint32_t seq, const uint8_t * data, size_t data_len) {
 	// set up data header and copy packet data to scratch buf
 	memset(data_scratch_buf, '\0', 16);
-	memcpy(data_scratch_buf, (uint8_t *) &data_len, 4);
+
+	uint32_t block_size = data_len;
+	if (command == ESP_FLASH_DATA) {
+		// has to pad
+		block_size = ESP_MAX_FLASH_BLOCK_SIZE;
+		memset(data_scratch_buf + 16, '\xFF', block_size);
+	}
+
+	memcpy(data_scratch_buf, (uint8_t *) &block_size, 4);
 	memcpy(data_scratch_buf + 4, (uint8_t *) &seq, 4);
 	memcpy(data_scratch_buf + 16, data, data_len);
 
 	packet_header_t mem_data_packet_header = {
 		.direction = 0x0,
-		.command = ESP_MEM_DATA,
+		.command = command,
 		.data_len = 0x0,
 		.value_or_checksum = checksum(data, data_len),
 	};
-	size_t mem_data_packet_size = build_packet(send_packet_buf, SEND_PACKET_BUF_SIZE, &mem_data_packet_header, data_scratch_buf, 16 + data_len);
+	size_t mem_data_packet_size = build_packet(send_packet_buf, SEND_PACKET_BUF_SIZE, &mem_data_packet_header, data_scratch_buf, 16 + block_size);
 
-	printf("ram_download_block\n");
-	hexdump(send_packet_buf, mem_data_packet_size);
+	printf("download_block\n");
+	// hexdump(send_packet_buf, mem_data_packet_size);
 
 	write_packet_data(port_fd, send_packet_buf, mem_data_packet_size);
 
-	wait_for_response(port_fd, ESP_MEM_DATA);
+	wait_for_response(port_fd, command);
 }
 
-void ram_download_end(int port_fd, uint32_t entrypoint) {
+void download_end(int port_fd, uint8_t command, uint32_t entrypoint) {
 	uint8_t mem_end_data[8];
 
 	uint32_t no_jump_to_entrypoint = 0;
@@ -186,19 +190,43 @@ void ram_download_end(int port_fd, uint32_t entrypoint) {
 
 	packet_header_t mem_end_packet_header = {
 		.direction = 0x0,
-		.command = ESP_MEM_END,
+		.command = command,
 		.data_len = 0x0,
 		.value_or_checksum = 0x0,
 	};
 	size_t mem_end_packet_size = build_packet(send_packet_buf, SEND_PACKET_BUF_SIZE, &mem_end_packet_header, mem_end_data, 8);
 
-	printf("ram_download_end\n");
+	printf("download_end\n");
 	hexdump(send_packet_buf, mem_end_packet_size);
 
 	write_packet_data(port_fd, send_packet_buf, mem_end_packet_size);
 
 	// we do NOT wait for a response at the end of this because that response could be corrupted if/when the chip resets
 	// it's up to the caller to wait for a signal from the code on the chip, if necessary
+}
+
+void ram_download_start(int port_fd, size_t data_len, size_t block_count, size_t block_size, uint32_t offset) {
+	download_start(port_fd, ESP_MEM_BEGIN, data_len, block_count, block_size, offset);
+}
+
+void ram_download_block(int port_fd, uint32_t seq, const uint8_t * data, size_t data_len) {
+	download_block(port_fd, ESP_MEM_DATA, seq, data, data_len);
+}
+
+void ram_download_end(int port_fd, uint32_t entrypoint) {
+	download_end(port_fd, ESP_MEM_END, entrypoint);
+}
+
+void flash_download_start(int port_fd, size_t data_len, size_t block_count, size_t block_size, uint32_t offset) {
+	download_start(port_fd, ESP_FLASH_BEGIN, data_len, block_count, block_size, offset);
+}
+
+void flash_download_block(int port_fd, uint32_t seq, const uint8_t * data, size_t data_len) {
+	download_block(port_fd, ESP_FLASH_DATA, seq, data, data_len);
+}
+
+void flash_download_end(int port_fd, uint32_t entrypoint) {
+	download_end(port_fd, ESP_FLASH_END, entrypoint);
 }
 
 uint32_t read_reg(int port_fd, uint32_t address) {
@@ -360,4 +388,46 @@ void read_flash(int port_fd, uint32_t offset, uint32_t length, uint32_t block_si
 			}
 		}
 	}
+}
+
+void write_flash(int port_fd, uint32_t offset, uint8_t * data, uint32_t length, uint32_t block_size) {
+	uint32_t block_count = length / block_size;
+	if (length % block_size != 0) {
+		block_count += 1;
+	}
+
+	flash_download_start(port_fd, length, block_count, block_size, offset);
+	for (size_t i = 0; i < block_count; i++) {
+		uint32_t current_block_size = block_size;
+		if (i == block_count - 1) {
+			current_block_size = length % block_size;
+			if (current_block_size == 0) {
+				current_block_size = block_size;
+			}
+		}
+		flash_download_block(port_fd, i, data + (i * block_size), current_block_size);
+	}
+}
+
+void md5_flash(int port_fd, uint32_t offset, uint32_t length) {
+	uint8_t md5_flash_data[16];
+
+	memset(md5_flash_data, '\0', 16);
+	memcpy(md5_flash_data, (uint8_t *) &offset, 4);
+	memcpy(md5_flash_data + 4, (uint8_t *) &length, 4);
+
+	packet_header_t md5_flash_packet_header = {
+		.direction = 0x0,
+		.command = ESP_SPI_FLASH_MD5,
+		.data_len = 0x0,
+		.value_or_checksum = 0x0,
+	};
+	size_t md5_flash_packet_size = build_packet(send_packet_buf, SEND_PACKET_BUF_SIZE, &md5_flash_packet_header, md5_flash_data, 16);
+
+	hexdump(send_packet_buf, md5_flash_packet_size);
+
+	write_packet_data(port_fd, send_packet_buf, md5_flash_packet_size);
+
+	wait_for_response(port_fd, ESP_SPI_FLASH_MD5);
+	printf("yayyayayay\n");
 }

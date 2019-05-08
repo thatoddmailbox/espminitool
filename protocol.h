@@ -7,8 +7,8 @@
 
 // constants
 #define ESP_FLASH_BEGIN 0x02
-#define ESP_FLASH_END 0x03
-#define ESP_FLASH_DATA 0x04
+#define ESP_FLASH_DATA 0x03
+#define ESP_FLASH_END 0x04
 #define ESP_MEM_BEGIN 0x05
 #define ESP_MEM_END 0x06
 #define ESP_MEM_DATA 0x07
@@ -17,10 +17,11 @@
 #define ESP_READ_REG 0x0a
 #define ESP_SPI_SET_PARAMS 0x0b
 #define ESP_SPI_ATTACH 0x0d
+#define ESP_SPI_FLASH_MD5 0x13
 #define ESP_READ_FLASH 0xd2
 
 #define ESP_FLASH_SECTOR_SIZE 0x1000
-#define ESP_MAX_FLASH_BLOCK_SIZE 0x400
+#define ESP_MAX_FLASH_BLOCK_SIZE 0x4000
 #define ESP_MAX_RAM_BLOCK_SIZE 0x1800
 
 // structs
