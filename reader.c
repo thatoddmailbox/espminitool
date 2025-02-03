@@ -5,6 +5,7 @@ uint8_t scratch_buf[SCRATCH_BUF_SIZE];
 
 uint16_t scratch_buf_index = 0;
 
+uint8_t packet_buf[PACKET_BUF_SIZE];
 packet_header_t * packet_buf_header = (packet_header_t *)(packet_buf + 1);
 
 uint16_t read_packet(int port_fd) {
